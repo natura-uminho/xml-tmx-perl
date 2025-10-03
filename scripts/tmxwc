@@ -1,0 +1,43 @@
+#!/usr/bin/perl -s
+
+# ABSTRACT: Gives statistics about tmx file.
+# PODNAME: tmxwc
+
+our($h);
+use XML::TMX::Reader;
+
+my $TTU = 0;
+my $n = scalar(@ARGV);
+
+for my $file (@ARGV) {
+    my $tm = XML::TMX::Reader->new($file);
+
+    my $TU = 0;
+    $tm->for_tu({-raw => 1 },
+                 sub { $TU++ ;
+                       print STDERR "\r$TU..." unless $TU%1000;
+                   }
+                );
+    print (($h?"":"$file: "),"$TU tu.\n");
+    $TTU += $TU;
+}
+
+print  "total: $TTU tu.\n" if $n > 1;
+
+__END__
+
+=encoding utf-8
+
+
+=head1 SYNOPSIS
+
+ tmxwc  tmx1 [tmx2 ...]
+
+  -h     don't print filenames (default: print filenames)
+
+=head1 DESCRIPTION
+
+Gives statistical information about TMX files like the number of
+translation units.
+
+=cut

@@ -1,0 +1,71 @@
+#!/usr/bin/perl -w -s
+
+# PODNAME: tmx2html
+# ABSTRACT: Converts a TMX to an HTML formatted page
+
+use strict;
+use warnings;
+
+use XML::TMX;
+use XML::TMX::Reader;
+
+our ($icons,$o,$ff,$v);
+
+my $tmx = shift;
+my $tmx_obj = XML::TMX::Reader->new($tmx);
+my $OUT ;
+
+$o //= "__.html" if $v;
+if ($v and $v eq "1"){ $v="firefox" }
+
+if($o){ open($OUT, ">", $o ) or die("Cant create $o\n") }
+else  { $OUT = \*STDOUT }
+
+binmode($OUT,":utf8");
+
+print $OUT qq{
+<html>
+<head>
+  <style>
+tr {
+    background-color: #e0e0e0;
+    vertical-align: top;
+} 
+tr:nth-child(even) {background-color: #f0f0f0;}
+/* tr:hover           {background-color: #c8c8c8;} */
+tr:hover           {background-color: #ffe0e0;}
+th, td { 
+  width:50%;
+}
+ </style>
+  <title>    </title>
+  <meta charset="UTF-8"/>
+</head>
+<body>
+},
+ $tmx_obj->to_html(),
+
+qq{</body>
+</html>
+};
+
+if ($v){system("$v $o") }
+
+=encoding UTF-8
+
+
+
+=head1 SYNOPSIS
+
+   tmx2html [-icons] file.tmx > file.html
+      -o=out-html      -- def: __.html
+      -v               -- show with firefox
+      -v=chromium      -- show with chromium
+
+=head1 DESCRIPTION
+
+Pretty prints a TMX as an HTML file. Icons for languages can be
+produced, but still buggy.
+
+=cut
+

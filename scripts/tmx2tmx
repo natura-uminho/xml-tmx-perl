@@ -1,0 +1,295 @@
+#!/usr/bin/perl -s
+
+# PODNAME: tmx2tmx
+# ABSTRACT: Utility to convert and filter TMX files
+
+use strict;
+use warnings;
+
+use XML::TMX::Reader;
+use XML::TMX::Writer;
+
+use XML::DT;
+
+our (
+     $toTrados,   ## Fix some issues in the TMX file the old trados software did not cope with
+     $clean,      ## Remove empty UTs and UTs with only junk characters
+     $cat,        ## Concatenates TMX files
+     $select,     ## Filters the TMX to the selected languages
+    );
+
+# here we must take care that only one of the options is being used.
+
+=encoding utf-8
+
+=head1 SYNOPSYS
+
+  tmx2tmx -cat file1.tmx ... filen.tmx > file.tmx
+
+  tmx2tmx -toTrados file1.tmx > file2.tmx
+
+  tmx2tmx -clean file1.tmx > file2.tmx
+
+  tmx2tmx -select=PT,EN multilingual.tmx > pt-en.tmx
+
+=head1 DESCRIPTION
+
+This utility processes TMX documents and return TMX documents. Tasks
+done with this utility include conversion between TMX versions and TMX
+cleaning.
+
+=head2 TRADOS conversion
+
+As you maybe know, TRADOS is a company producing computer software for
+translators. It includes WorkBench which imports TMX
+files. Unfortunately, the version I used do not import TMX version
+1.4.
+
+This process is done using the switch C<-toTrados>:
+
+  tmx2tmx -toTrados file.tmx > trados.tmx
+
+=head2 TMX Cleaning
+
+Specially when translation memories are created from anotated text, or
+extracted directly from the Internet using any automatic method. This
+switch is used to remove junk in translation units.
+
+This option tries to remove junk from TMX files, like empty pairs
+where one of the sides is empty, or removing other junk type.
+
+Use it this way:
+
+   tmx2tmx -clean file.tmx > file2.tmx
+
+=head2 Concatenating TMX
+
+   tmx2tmx -cat file1.tmx ... filen.tmx > file.tmx
+   ls | grep '.tmx$' | tmx2tmx -cat > file.tmx
+
+=head2 Select languages
+
+Select a bunch of languages:
+
+    tmx2tmx -select=PT,EN,FR huge.tmx > pt-en-fr.tmx
+
+=cut
+
+toTrados() if $toTrados;
+clean()    if $clean;
+cat()      if $cat;
+selectl()  if $select;
+
+die "No option supplied\n";
+
+=head1 SEE ALSO
+
+tmx2html, po2tmx, XML::TMX
+
+=cut
+
+
+
+#--( AUX FUNCS )-----------
+sub trim {
+    my $x = shift;
+    for ($x) {
+        s!^\s+!!;
+        s!\s+$!!
+    }
+    $x
+}
+
+
+sub toTrados {
+    $/ = "</tu>";
+
+    my $header = <>;
+
+    # <header/> -> <header></header>
+    $header =~ s!<header([^/>]+)/>!<header$1></header>!;
+
+    # <body version...> -> <body>
+    $header =~ s!<body[^>]+>!<body>!;
+
+    # tmx version -> <tmx version="1.1">
+    $header =~ s!<tmx version[^>]+>!<tmx version="1.1">!;
+
+    # srclang -> srclang="foo"
+    if ($header =~ m!(xml:)?lang=(["'])([^"']+)\2!) {
+        my $lang = $3;
+        $header =~ s!srclang=(["'])[^"']+\1!srclang="$lang"!;
+    }
+
+    $header =~ s/xml:lang/lang/g;
+
+    # xml:lang -> lang
+    print $header;
+
+    while (<>) {
+        s/xml:lang/lang/g;
+        print
+    }
+
+    # ugly, but prevents us from forgetting an else somewhere.
+    exit;
+}
+
+
+sub clean {
+    my $file;
+    my $reader;
+    if ($file = shift) {
+        # isto tv fosse mais rápido em sax...
+        print dt( $file,
+                  -default => sub{ toxml() },
+                  seg => sub{
+                      $c = trim($c); toxml
+                  },
+                  tu  => sub{
+                      # remove entries with junk, only
+                      return "" if $c =~ m!<seg>(\s|[\|\!@#\$%^&\-])*</seg>!;
+                      toxml()
+                  },
+                );
+    } else {
+        die "At the moment, we do not handle files from stdin";
+        # TODO...  aqui fazia jeito que o XML::TMX::Reader lêsse de um
+        # filehandle já aberto (STDIN, por exemplo);
+    }
+    exit;
+}
+
+sub _join_and_print_headers {
+    my $header;
+
+    while (@_) {
+        my $file = shift @_;
+        my $reader = XML::TMX::Reader->new($file);
+        for my $key (keys %{$reader->{header}}) {
+            if ($key eq "-prop") {
+                for my $type (keys %{$reader->{header}{$key}}) {
+                    push @{$header->{$key}{$type}}, @{$reader->{header}{$key}{$type}}
+                }
+            }
+            elsif ($key eq "-note") {
+                push @{$header->{$key}}, @{$reader->{header}{$key}}
+            }
+            else {
+                $header->{$key} = $reader->{header}{$key}
+            }
+        }
+    }
+
+    my $writer = XML::TMX::Writer->new();
+    $writer->start_tmx(%$header);
+}
+
+sub open_tmx_with_correct_encoding {
+  # in the future it might be a good idea to use the guess_encoding method from Reader.pm
+  my $filename = shift;
+
+  open my $f, $filename or die "Can't open file $filename";
+  my $header = <$f>;
+  close $f;
+
+  my $fh;
+  if ($header =~ /encoding\s*=\s*["']([^"']+)["']/) {
+    open $fh, "<:encoding($1)", $filename or die "Can't open file $filename";
+  }
+  else {
+    open $fh, "<:utf8", $filename or die "Can't open file $filename";
+  }
+  return $fh;
+}
+
+sub cat {
+    my @files ;
+    if (@ARGV) {
+        @files = @ARGV;
+    } else {
+        @files = map { chomp; $_ } <>;
+    }
+
+    binmode STDOUT, ":utf8";
+    _join_and_print_headers(@files);
+
+    my $fh;
+    my $file = shift @files;
+    $fh = open_tmx_with_correct_encoding($file);
+    # open $fh, "<:utf8", $file or die "Cannot open file: $file\n";
+    while (<$fh>) {
+        last if m!<body!;
+    }
+    print "<!-- FILE: $file -->\n";
+    while (<$fh>) {
+        s!</\s*(body|tmx)\s*>!!;
+        print;
+    }
+    close $fh;
+
+    for $file (@files) {
+	$fh = open_tmx_with_correct_encoding($file);
+        # open $fh, "<:utf8", $file or die "Cannot open file: $file\n";
+        print "<!-- FILE: $file -->\n";
+        while (<$fh>) {
+            last if m!<body!;
+        }
+        s/<body[^>]*>//g;
+        print;
+        while (<$fh>) {
+            s!</\s*(body|tmx)\s*>!!;
+            print;
+        }
+        close $fh;
+    }
+    print "</body>\n";
+    print "</tmx>\n";
+
+    exit;
+}
+
+sub selectl {
+    my @files;
+    if (@ARGV) {
+        @files = @ARGV;
+    } else {
+        @files = map { chomp; $_ } <>;
+    }
+
+    _join_and_print_headers(@files);
+    my %languages = map { (lc $_ => 1) } split( /,/, $select );
+
+    my $tmx;
+    while ($tmx = shift @files) {
+        die "Can't find $tmx" if (!$tmx || !-f$tmx);
+
+        print STDERR "$tmx\n";
+        my $reader = XML::TMX::Reader->new($tmx);
+        $reader->for_tu(
+                        {
+                         -verbose => 1,
+                         -output => 1,
+                         -header => 0
+                        },
+                        sub {
+                            my $tu = shift;
+                            my $l = 0;
+                            for my $k (keys %$tu) {
+                                next if $k =~ /^-/;
+                                if (exists $languages{lc $k}) {
+                                    $l++;
+                                } else {
+                                    delete $tu->{$k}
+                                }
+                            }
+                            if ($l == keys %languages) {
+                                return $tu;
+                            } else {
+                                return undef;
+                            }
+                        });
+    }
+    print "</body>\n</tmx>\n";
+    exit;
+}

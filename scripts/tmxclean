@@ -1,0 +1,102 @@
+#!/usr/bin/perl -s
+
+# PODNAME: tmxclean
+# ABSTRACT: Simple tool to clean TMX files
+
+use v5.10;
+use strict;
+use warnings;
+
+use XML::TMX::Reader;
+
+our (
+     $junk, # remove if one of the languages just have junk
+     $o , $output,  # output filename
+     $eq ,  # remove if seg(l1) = seg(l2)
+     $len , # remove if len(li) > 50 ∧ len(lj) > 2len(li)
+     $v, $verbose,
+     $all,
+     $maxwords, # remove if longer than maxwords (def: infinit)
+     $sw, # remove if strang words (\w{25,}| \w \w \w \w \w \w )
+    );
+
+my $cleaned = 0;
+my $processed = 0;
+my $tmx = shift or help();
+my $reader = XML::TMX::Reader->new($tmx);
+
+$junk//=1;
+$len //=1 if $all;
+$eq //=1 if $all;
+$sw //=1 if $all;
+
+$output ||= $o || "_cleaned_$tmx";
+
+print STDERR "loading..." if $v;
+
+$reader->for_tu( {output => $output},
+                  \&cleaner);
+
+printf STDERR "\rRemoved %d/%d (%.3f%%).\n", 
+              $cleaned, $processed, 100*$cleaned/$processed if $v;
+
+sub cleaner {
+    my $langs = shift;
+    $processed++;
+    my $remove = 0;
+    my $sent = "";
+    my %seg=();
+    my @len=();
+    for my $k (keys %$langs) {
+        next if $k =~ /^-/;
+        $langs->{$k}{-seg} =~ s/(.)(\1{10})\1*/$2/g if $sw;
+        $sent = $langs->{$k}{-seg};
+        $remove = 1 if $eq    && $seg{$sent}++;
+
+        $remove = 1 if $junk  && $sent =~ /^[-.,0-9\s]+$/;
+        $remove = 1 if $junk  && $sent =~ /^\W*$/;
+        $remove = 1 if $maxwords  && split('\s+',$sent) > $maxwords;
+        $remove = 1 if $sw  && $sent =~ /\w{25}| ([[:alpha:]] ){6}/;
+        push(@len, length($sent));
+    }
+    @len = sort{$a <=> $b} @len;
+    $remove = 1 if $len && $len[-1] > 50 && $len[0]*2< $len[-1];
+
+    $cleaned++ if $remove;
+    printf STDERR "\rRemoved %d/%d (%.3f%%)...", $cleaned, $processed,
+      100*$cleaned/$processed if $v && $processed%1000==0;
+    return $remove ? undef : $langs;
+}
+
+sub help {
+    print "   tmxclean [-junk=1] <file.tmx>\n";
+    exit 1;
+}
+
+=encoding UTF-8
+
+=head1 SYNOPSIS
+
+  $ tmx-clean file.tmx
+    -all             same as -junk -eq -len
+    -junk     remove if one of the languages just have junk (def: True)
+    -eq       remove if seg(l1) = seg(l2)
+    -len      remove if len(li) > 50 ∧ len(lj) > 2len(li)
+    -output=out.tmx
+    -v, -verbose
+    -maxwords=5  remove if longer than maxwords (def: infinity)
+    -sw       remove if strang words (\w{25,}| \w \w \w \w \w \w )
+	          and also squeeze repetitions (.)(\1{10})\1* → $2
+
+=head1 DESCRIPTION
+
+Removes the translation units (TU) that
+
+ 1. have no letters...  (unless -junk=0)
+ 2. seg(L1) = seg(L2)   (if -eq)
+
+=head1 SEE ALSO
+
+XML::TMX
+
+=cut
