@@ -1,4 +1,4 @@
-#!/usr/bin/perl -w -s
+#!/usr/bin/perl -w
 
 # PODNAME: tmx2html
 # ABSTRACT: Converts a TMX to an HTML formatted page
@@ -9,14 +9,25 @@ use warnings;
 use XML::TMX;
 use XML::TMX::Reader;
 
-our ($icons,$o,$ff,$v);
+use Getopt::Long qw(:config bundling_override);
+my %op=();
+my $ret = Getopt::Long::GetOptions( \%op, 
+  "o=s",
+  "v",
+  "b=s",
+  ) or die "Invalid option. Try man tmx2html.\n";
+
+#our ($icons,$o,$ff,$v);
 
 my $tmx = shift;
 my $tmx_obj = XML::TMX::Reader->new($tmx);
-my $OUT ;
+my ($OUT,$o,$v) ;
 
-$o //= "__.html" if $v;
-if ($v and $v eq "1"){ $v="firefox" }
+$o = $op{o}      if $op{o};
+$o //= "__.html" if $op{v} || $op{b};
+
+if ($op{v} and $op{v} eq "1"){ $v="firefox" }
+$v = $op{b}      if $op{b};
 
 if($o){ open($OUT, ">", $o ) or die("Cant create $o\n") }
 else  { $OUT = \*STDOUT }
@@ -59,8 +70,8 @@ if ($v){system("$v $o") }
 
    tmx2html [-icons] file.tmx > file.html
       -o=out-html      -- def: __.html
-      -v               -- show with firefox
-      -v=chromium      -- show with chromium
+      -v               -- show html (def: with firefox)
+      -b=chromium      -- show html with chromium
 
 =head1 DESCRIPTION
 

@@ -1,4 +1,6 @@
 Revision history for Perl extension XML::TMX.
+0.43   2025-11-19
+       - tsv2tmx -remcom     to remove comments (lines starting with "#") (def:False)
 
 0.39   2022-07-05
        - tmxsplit defaults to utf8
