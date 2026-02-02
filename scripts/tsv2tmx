@@ -21,11 +21,11 @@ my $fs = qr'\t';
 #### ------
 
 GetOptions( 'help|h' => \$help, 'man' => \$man,
-			"source|sl=s" => \$sl,    
+            "source|sl=s" => \$sl,    
             "target|tl=s" => \$tl,  
             "header"   => \$header,
             "columns|c=s" => \$columns,
-			"remcom" => \$remcom,
+            "remcom" => \$remcom,
             "fs=s" => \$fs,
             "verbose|v"  => \$verbose)
 or pod2usage(2);
@@ -40,55 +40,66 @@ sub strip { my $v=shift;
   $v;
 }
 
+sub striphead { my $v=shift; 
+  $v =~ s/^\s*//;
+  $v =~ s/\s*$//;
+  $v =~ s/[ \/(){}]/_/g;
+  $v;
+}
+
 our ($c1, $c2);
 if ($columns =~ /^(\d+),(\d+)$/) {
-	($c1,$c2) = ($1,$2);
+    ($c1,$c2) = ($1,$2);
 } else {
-	die "Columns definition should be a pair of integers. Ex: 1,2\n";
+    die "Columns definition should be a pair of integers. Ex: 1,2\n";
 }
 
 if ($sl and $tl) { $header = 0; }
 else{
-	if ($header) {
-		my ($l1, $l2) = readLine("find langs in header");
-		$sl = strip($l1) unless defined $sl;
-		$tl = strip($l2) unless defined $tl;
-	} else {
-		die "No header, and one of the source or target languages not defined!\n";
+    if ($header) {
+        my ($l1, $l2) = readLine("find langs in header");
+        $sl //= striphead($l1); 
+        $tl //= striphead($l2);
+	if ($sl eq $tl) {                        
+	  $sl .= "-l1"; 
+	  $tl .= "-l2"; 
 	}
-	$header = 0;
+    } else {
+        die "No header, and one of the source or target languages not defined!\n";
+    }
+    $header = 0;
 }
 
 readLine() if $header;
 
 use XML::TMX::Writer;
 my $tmx = XML::TMX::Writer->new();
-$tmx->start_tmx(id => 'tsv2tmx');	
+$tmx->start_tmx(id => 'tsv2tmx');    
 
 my @r;
 while (@r = readLine()) {
-	$tmx->add_tu($sl=>$r[0],$tl=>$r[1]);
+    $tmx->add_tu($sl=>$r[0],$tl=>$r[1]);
 }
 
 $tmx->end_tmx();
 
 sub _log {
-	say STDERR @_ if $verbose;
+    say STDERR @_ if $verbose;
 }
 
 sub readLine {
     my $isheader = shift || 0;
-	my $line = <>;
-	return () unless $line;
+    my $line = <>;
+    return () unless $line;
 
-	chomp $line;
+    chomp $line;
     $line =~ s{&((\w+;)?)}{ if ($1){ "&$1" } else { "&amp;"} }ge;
     if    ($line =~ /^\s*$/ ){ return readLine() }
     elsif ($remcom and $line =~ /^#/ ){ return readLine() }
-	else { 
+    else { 
        my @fields = split /$fs/, $line;
        if ($isheader and scalar @fields <2 ){ 
-          die("Invalid header:$line\n") }
+           die("Invalid header:$line\n") }
        my $sl = strip($fields[$c1] or "");
        my $tl = strip($fields[$c2] or "");
 
@@ -98,7 +109,7 @@ sub readLine {
        }
        if ($sl or $tl){ return ($sl,$tl)  }
        else           { return readLine() }
-	}
+    }
 }
 
 __END__
@@ -111,20 +122,17 @@ __END__
 
 tsv2tmx - Create a TMX from a TSV file
 
-=head1 VERSION
-
-version 0.42
-
 =head1 SYNOPSIS
 
-tsv2tmx [options] file.tsv ...
+tsv2tmx [options] -header  file.tsv ...
+tsv2tmx [options] -sl PT -tl EN  file.tsv ...
 
  Options:
    --help            brief help message
    --man             full documentation
    --verbose | -v    activated verbose mode
    --sl=EN --tl=PT   describe source and target language names
-   --header          treat first line as a heading
+   --header          treat first line as a heading (source and target langs)
    --columns=1,2     specify which columns to extract
    --remcom          remove comments (lines starting with "#")
    --fs='::'         set field separator. (separated by '::')

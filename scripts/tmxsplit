@@ -8,7 +8,7 @@ use utf8;
 use XML::DT;
 #use bytes;
 
-our ($twente,$latin1,$utf8,$q,$cutmaxlen,$el);
+our ($twente,$latin1,$utf8,$q,$cutmaxlen,$el, $lang);
 
 $utf8 = 1 unless $latin1;
 
@@ -74,6 +74,7 @@ for $f (@ARGV){
           my $x;
           open $x, ">$filename-$k" or die("cant >$filename-$k\n");
           binmode($x,":utf8") if $utf8;
+          myprint($x, $k, $i) if $lang;   ## print lang if "-lang"
           myprint($x, $data->{$k},$i);
           $files{"$filename-$k"} = $x;
         }
@@ -132,6 +133,7 @@ The names for output files is based on the first tmx file supplied.
 
 =head1 Options
 
+ -lang    -- put language id in the first line
  -twente  -- makes a format compatible with twente-aligner
  -el      -- TU separated by an empty-line
 

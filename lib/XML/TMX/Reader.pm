@@ -457,10 +457,14 @@ sub to_html {
       for (@ls) { 
          if( defined $langs->{$_}){
             my $val = $langs->{$_}{-seg};
-	    if ($val =~ /^##\s*(.*)/s ){ 
-                $ret .= "\n\t<td l='$_'><h3>$1</h3></td>" }
+	    if ($val =~ /^####\s*(.*)/s ){ 
+                $ret .= "\n\t<td l='$_' s='h4'><h5>$1</h5></td>" }
+	    elsif ($val =~ /^###\s*(.*)/s ){ 
+                $ret .= "\n\t<td l='$_' s='h3'><h4>$1</h4></td>" }
+	    elsif ($val =~ /^##\s*(.*)/s ){ 
+                $ret .= "\n\t<td l='$_' s='h2'><h3>$1</h3></td>" }
             elsif( $val =~ /^#\s*(.*)/s ){ 
-                $ret .= "\n\t<td l='$_'><h2>$1</h3></td>" }
+                $ret .= "\n\t<td l='$_' s='h1'><h2>$1</h2></td>" }
 	    else {
                 $ret .= "\n\t<td l='$_'>$langs->{$_}{-seg}</td>" }
          }
